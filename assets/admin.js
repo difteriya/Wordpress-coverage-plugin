@@ -45,9 +45,27 @@
             const features = e.target.getFeatures();
             if (features && features.getLength && features.getLength() > 0) {
                 const f = features.item(0);
+                
+                // Center map on selected feature
+                centerMapOnFeature(f);
+                
+                // Open properties panel
                 openPropsPanel(f);
             } else {
                 closePropsPanel();
+            }
+        });
+
+        // Add double-click to center on feature
+        map.on('dblclick', function(evt) {
+            const feature = map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+                return feature;
+            });
+            if (feature) {
+                centerMapOnFeature(feature);
+                selectInteraction.getFeatures().clear();
+                selectInteraction.getFeatures().push(feature);
+                openPropsPanel(feature);
             }
         });
 
@@ -72,9 +90,38 @@
                 });
                 
                 source.addFeatures(feats);
-                // zoom to features
-                const extent = source.getExtent();
-                if (!ol.extent.isEmpty(extent)) map.getView().fit(extent, { padding: [20,20,20,20] });
+                // zoom to features with improved extent calculation
+                if (feats.length > 0) {
+                    let totalExtent = ol.extent.createEmpty();
+                    
+                    feats.forEach(function(feature) {
+                        const props = feature.getProperties() || {};
+                        let extent;
+                        
+                        // Handle circles specially for better initial view
+                        if (props.geometry_type === 'Circle' && props.circle_center && props.circle_radius) {
+                            const center = props.circle_center;
+                            const radius = props.circle_radius;
+                            extent = [
+                                center[0] - radius,
+                                center[1] - radius,
+                                center[0] + radius,
+                                center[1] + radius
+                            ];
+                        } else {
+                            extent = feature.getGeometry().getExtent();
+                        }
+                        
+                        ol.extent.extend(totalExtent, extent);
+                    });
+                    
+                    if (!ol.extent.isEmpty(totalExtent)) {
+                        map.getView().fit(totalExtent, { 
+                            padding: [50, 50, 50, 50],
+                            maxZoom: 14
+                        });
+                    }
+                }
             } catch(e) {
                 console.warn('Invalid geojson in meta:', e);
             }
@@ -95,6 +142,11 @@
 
         // props panel buttons
         $('#coverage-prop-save').on('click', function(){ savePropsToFeature(); });
+        $('#coverage-prop-center').on('click', function(){ 
+            if (selectedFeature) { 
+                centerMapOnFeature(selectedFeature); 
+            } 
+        });
         $('#coverage-prop-delete').on('click', function(){ 
             if (selectedFeature) { 
                 source.removeFeature(selectedFeature); 
@@ -165,6 +217,46 @@
         $addContainer.before(html);
     }
 
+    function centerMapOnFeature(feature) {
+        if (!feature) return;
+        
+        const props = feature.getProperties() || {};
+        const geom = feature.getGeometry();
+        
+        if (!geom) return;
+        
+        // Handle circle features specially
+        if (props.geometry_type === 'Circle' && props.circle_center && props.circle_radius) {
+            // For circles, use the original center and radius for better centering
+            const center = props.circle_center;
+            const radius = props.circle_radius;
+            
+            // Create a buffer around the center for proper zoom
+            const padding = radius * 0.5; // 50% padding
+            const extent = [
+                center[0] - radius - padding,
+                center[1] - radius - padding,
+                center[0] + radius + padding,
+                center[1] + radius + padding
+            ];
+            
+            map.getView().fit(extent, {
+                duration: 500,
+                padding: [50, 50, 50, 50]
+            });
+        } else {
+            // For other geometries, use the standard extent
+            const extent = geom.getExtent();
+            if (!ol.extent.isEmpty(extent)) {
+                map.getView().fit(extent, {
+                    duration: 500,
+                    padding: [50, 50, 50, 50],
+                    maxZoom: 16 // Prevent zooming too close
+                });
+            }
+        }
+    }
+
     function startDraw(type) {
         if (draw) map.removeInteraction(draw);
         
@@ -217,6 +309,7 @@
             }
             
             // open props for the newly drawn feature
+            centerMapOnFeature(feature);
             openPropsPanel(feature);
             map.removeInteraction(draw); 
             draw = null; 
