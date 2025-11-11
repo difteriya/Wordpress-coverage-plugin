@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Map Coverage Plugin with Region Cards
  * Description: Advanced WordPress plugin for managing coverage areas with interactive maps, intelligent search, region cards display, and full Azerbaijani translation. Features include OpenLayers mapping, autocomplete address search, responsive card layouts, Elementor integration, and comprehensive coverage management.
- * Version: 1.1.2
+ * Version: 1.1.3
  * Author: Khudiyev
  * Author URI: https://xudiyev.com
  * Text Domain: map-coverage-plugin
@@ -38,11 +38,12 @@ class Map_Coverage_Plugin {
         add_action( 'wp_ajax_search_streets', array( $this, 'ajax_search_streets' ) );
         add_action( 'wp_ajax_nopriv_search_streets', array( $this, 'ajax_search_streets' ) );
         
-        // Only add Elementor hooks if Elementor is active
-        if ( did_action( 'elementor/loaded' ) || class_exists( '\Elementor\Plugin' ) ) {
-            add_action( 'elementor/widgets/register', array( $this, 'register_elementor_widgets' ) );
-            add_action( 'elementor/elements/categories_registered', array( $this, 'add_elementor_widget_categories' ) );
-        }
+        // Add Elementor hooks - they will only execute if Elementor is active
+        add_action( 'elementor/widgets/register', array( $this, 'register_elementor_widgets' ), 10 );
+        add_action( 'elementor/elements/categories_registered', array( $this, 'add_elementor_widget_categories' ), 10 );
+        
+        // Alternative hook for older Elementor versions
+        add_action( 'elementor/widgets/widgets_registered', array( $this, 'register_elementor_widgets_legacy' ), 10 );
         
         add_shortcode( 'map_coverage', array( $this, 'shortcode_map' ) );
         add_shortcode( 'map_coverage_search', array( $this, 'shortcode_search_only' ) );
@@ -688,43 +689,67 @@ class Map_Coverage_Plugin {
         );
     }
 
+    public function register_elementor_widgets_legacy( $widgets_manager = null ) {
+        // For older Elementor versions
+        if ( ! $widgets_manager ) {
+            $widgets_manager = \Elementor\Plugin::instance()->widgets_manager;
+        }
+        
+        $this->register_elementor_widgets( $widgets_manager );
+    }
+
     public function register_elementor_widgets( $widgets_manager ) {
+        // Debug logging
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( "Map Coverage Plugin: Attempting to register Elementor widgets" );
+        }
+        
         // Check if Elementor is active and widget manager is available
         if ( ! $widgets_manager || ! class_exists( '\Elementor\Widget_Base' ) ) {
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( "Map Coverage Plugin: Elementor not available or Widget_Base class missing" );
+            }
             return;
         }
         
         // Get plugin directory path
         $plugin_dir = plugin_dir_path( __FILE__ );
         
-        // Check if widget files exist before requiring them
+        // Define widget files with their class names
         $widget_files = [
-            $plugin_dir . 'widgets/map-widget.php',
-            $plugin_dir . 'widgets/search-widget.php', 
-            $plugin_dir . 'widgets/cards-widget.php'
+            'widgets/map-widget.php' => 'Map_Coverage_Map_Widget',
+            'widgets/search-widget.php' => 'Map_Coverage_Search_Widget', 
+            'widgets/cards-widget.php' => 'Map_Coverage_Cards_Widget'
         ];
         
-        foreach ( $widget_files as $file ) {
-            if ( ! file_exists( $file ) ) {
-                error_log( "Map Coverage Plugin: Widget file not found: " . $file );
-                return;
+        foreach ( $widget_files as $file => $class_name ) {
+            $full_path = $plugin_dir . $file;
+            
+            if ( file_exists( $full_path ) ) {
+                require_once( $full_path );
+                
+                // Check if class exists and register it
+                if ( class_exists( $class_name ) ) {
+                    try {
+                        $widgets_manager->register( new $class_name() );
+                        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                            error_log( "Map Coverage Plugin: Successfully registered widget: " . $class_name );
+                        }
+                    } catch ( Exception $e ) {
+                        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                            error_log( "Map Coverage Plugin: Error registering widget " . $class_name . ": " . $e->getMessage() );
+                        }
+                    }
+                } else {
+                    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                        error_log( "Map Coverage Plugin: Widget class not found: " . $class_name );
+                    }
+                }
+            } else {
+                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                    error_log( "Map Coverage Plugin: Widget file not found: " . $full_path );
+                }
             }
-        }
-        
-        // Require widget files
-        require_once( $plugin_dir . 'widgets/map-widget.php' );
-        require_once( $plugin_dir . 'widgets/search-widget.php' );
-        require_once( $plugin_dir . 'widgets/cards-widget.php' );
-        
-        // Check if widget classes exist before registering
-        if ( class_exists( 'Map_Coverage_Map_Widget' ) ) {
-            $widgets_manager->register( new \Map_Coverage_Map_Widget() );
-        }
-        if ( class_exists( 'Map_Coverage_Search_Widget' ) ) {
-            $widgets_manager->register( new \Map_Coverage_Search_Widget() );
-        }
-        if ( class_exists( 'Map_Coverage_Cards_Widget' ) ) {
-            $widgets_manager->register( new \Map_Coverage_Cards_Widget() );
         }
     }
 }
