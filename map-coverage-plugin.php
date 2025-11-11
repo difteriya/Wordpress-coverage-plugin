@@ -1,5 +1,6 @@
 <?php
 /**
+<<<<<<< HEAD
  * Plugin Name: Map Coverage Plugin with Region Cards
  * Description: Advanced WordPress plugin for managing coverage areas with interactive maps, intelligent search, region cards display, and full Azerbaijani translation. Features include OpenLayers mapping, autocomplete address search, responsive card layouts, Elementor integration, and comprehensive coverage management.
  * Version: 1.1.0
@@ -12,6 +13,13 @@
  * Network: false
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+=======
+ * Plugin Name: Map Coverage Plugin
+ * Description: Add coverage areas (points, polylines, circles) and display them on a frontend map. Uses OpenLayers. Stores geometries as GeoJSON in post meta for custom post type 'coverage_area'.
+ * Version: 0.1.0
+ * Author: Generated
+ * Text Domain: map-coverage-plugin
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -37,6 +45,7 @@ class Map_Coverage_Plugin {
         add_action( 'admin_init', array( $this, 'init_settings' ) );
         add_action( 'wp_ajax_search_streets', array( $this, 'ajax_search_streets' ) );
         add_action( 'wp_ajax_nopriv_search_streets', array( $this, 'ajax_search_streets' ) );
+<<<<<<< HEAD
         add_action( 'elementor/widgets/register', array( $this, 'register_elementor_widgets' ) );
         add_action( 'elementor/elements/categories_registered', array( $this, 'add_elementor_widget_categories' ) );
         add_shortcode( 'map_coverage', array( $this, 'shortcode_map' ) );
@@ -44,6 +53,11 @@ class Map_Coverage_Plugin {
         add_shortcode( 'coverage_search', array( $this, 'shortcode_search_only' ) );
         add_shortcode( 'coverage_cards', array( $this, 'shortcode_region_cards' ) );
         add_shortcode( 'coverage_region_cards', array( $this, 'shortcode_region_cards' ) );
+=======
+        add_action( 'elementor/widgets/widgets_registered', array( $this, 'register_elementor_widgets' ) );
+        add_shortcode( 'map_coverage', array( $this, 'shortcode_map' ) );
+        add_shortcode( 'map_coverage_search', array( $this, 'shortcode_search_only' ) );
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
     }
 
     public function register_post_type() {
@@ -58,7 +72,11 @@ class Map_Coverage_Plugin {
             'show_ui' => true,
             'has_archive' => false,
             'rewrite' => array( 'slug' => 'ehate' ),
+<<<<<<< HEAD
             'supports' => array( 'title', 'editor', 'thumbnail' ),
+=======
+            'supports' => array( 'title', 'editor' ),
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
             'capability_type' => 'post',
             'taxonomies' => array( self::CITY_TAXONOMY ),
         );
@@ -563,6 +581,7 @@ class Map_Coverage_Plugin {
         return ob_get_clean();
     }
 
+<<<<<<< HEAD
     public function shortcode_region_cards( $atts ) {
         $atts = shortcode_atts( array(
             'city' => '', // Filter by specific city
@@ -686,6 +705,129 @@ class Map_Coverage_Plugin {
         $widgets_manager->register( new \Map_Coverage_Map_Widget() );
         $widgets_manager->register( new \Map_Coverage_Search_Widget() );
         $widgets_manager->register( new \Map_Coverage_Cards_Widget() );
+=======
+    public function register_elementor_widgets() {
+        if ( class_exists( '\Elementor\Plugin' ) ) {
+            \Elementor\Plugin::instance()->widgets_manager->register_widget_type( new Map_Coverage_Elementor_Widget() );
+        }
+    }
+}
+
+// Elementor Widget Class
+if ( class_exists( '\Elementor\Widget_Base' ) ) {
+    class Map_Coverage_Elementor_Widget extends \Elementor\Widget_Base {
+
+        public function get_name() {
+            return 'map_coverage';
+        }
+
+        public function get_title() {
+            return 'Əhatə Xəritəsi';
+        }
+
+        public function get_icon() {
+            return 'fa fa-map';
+        }
+
+        public function get_categories() {
+            return [ 'general' ];
+        }
+
+        protected function _register_controls() {
+            $this->start_controls_section(
+                'content_section',
+                [
+                    'label' => 'Tənzimləmələr',
+                    'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
+                ]
+            );
+
+            $this->add_control(
+                'widget_type',
+                [
+                    'label' => 'Vidcet Növü',
+                    'type' => \Elementor\Controls_Manager::SELECT,
+                    'default' => 'full_map',
+                    'options' => [
+                        'full_map' => 'Tam Xəritə + Axtarış',
+                        'search_only' => 'Yalnız Axtarış Formu',
+                    ],
+                ]
+            );
+
+            $this->add_control(
+                'redirect_page',
+                [
+                    'label' => 'Yönləndirmə Səhifəsi (Search Only üçün)',
+                    'type' => \Elementor\Controls_Manager::TEXT,
+                    'placeholder' => '/ehate/rayon-adi',
+                    'condition' => [
+                        'widget_type' => 'search_only',
+                    ],
+                ]
+            );
+
+            $this->end_controls_section();
+
+            // Style Section
+            $this->start_controls_section(
+                'style_section',
+                [
+                    'label' => 'Stil',
+                    'tab' => \Elementor\Controls_Manager::TAB_STYLE,
+                ]
+            );
+
+            $this->add_control(
+                'background_gradient',
+                [
+                    'label' => 'Gradient Arxa Plan',
+                    'type' => \Elementor\Controls_Manager::SWITCHER,
+                    'label_on' => 'Bəli',
+                    'label_off' => 'Xeyr',
+                    'return_value' => 'yes',
+                    'default' => 'yes',
+                ]
+            );
+
+            $this->add_control(
+                'border_radius',
+                [
+                    'label' => 'Künc Radiusu',
+                    'type' => \Elementor\Controls_Manager::SLIDER,
+                    'size_units' => [ 'px' ],
+                    'range' => [
+                        'px' => [
+                            'min' => 0,
+                            'max' => 50,
+                            'step' => 1,
+                        ],
+                    ],
+                    'default' => [
+                        'unit' => 'px',
+                        'size' => 20,
+                    ],
+                    'selectors' => [
+                        '{{WRAPPER}} .map-coverage-container' => 'border-radius: {{SIZE}}{{UNIT}};',
+                        '{{WRAPPER}} .map-coverage-search-only' => 'border-radius: {{SIZE}}{{UNIT}};',
+                    ],
+                ]
+            );
+
+            $this->end_controls_section();
+        }
+
+        protected function render() {
+            $settings = $this->get_settings_for_display();
+            
+            if ( $settings['widget_type'] === 'search_only' ) {
+                $redirect_page = ! empty( $settings['redirect_page'] ) ? $settings['redirect_page'] : '';
+                echo do_shortcode( '[map_coverage_search redirect_page="' . esc_attr( $redirect_page ) . '"]' );
+            } else {
+                echo do_shortcode( '[map_coverage]' );
+            }
+        }
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
     }
 }
 

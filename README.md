@@ -1,7 +1,11 @@
 # Map Coverage Plugin
 
 **Creator:** Khudiyev  
+<<<<<<< HEAD
 **Version:** 1.1.0  
+=======
+**Version:** 1.0  
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
 **Website:** [xudiyev.com](https://xudiyev.com)
 
 Advanced WordPress plugin to create and manage coverage areas with interactive maps and intelligent address search functionality in Azerbaijani language.
@@ -27,6 +31,7 @@ Advanced WordPress plugin to create and manage coverage areas with interactive m
 - Color-coded coverage areas with custom styling
 - Modern gradient UI with glass morphism effects
 
+<<<<<<< HEAD
 ### 🎨 **Visual Display Options**
 - Card-based region display with featured images
 - Responsive grid layouts (1-4 columns)
@@ -41,6 +46,13 @@ Advanced WordPress plugin to create and manage coverage areas with interactive m
 - Live preview functionality in Elementor editor
 - Advanced styling controls and responsive design
 - Typography and color customization options
+=======
+### 🎨 **Elementor Integration**
+- Custom Elementor widget "Əhatə Xəritəsi" (Coverage Map)
+- Two widget modes: Full Map + Search, Search Only
+- Configurable styling and redirect options
+- Responsive design optimized for mobile
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
 
 ### 🌐 **Localization**
 - Fully translated to Azerbaijani language
@@ -69,11 +81,16 @@ Advanced WordPress plugin to create and manage coverage areas with interactive m
 
 ### Frontend Implementation
 ```php
+<<<<<<< HEAD
 // Full map with search functionality
+=======
+// Full map with search
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
 [map_coverage]
 
 // Search form only (redirects to coverage page)
 [map_coverage_search]
+<<<<<<< HEAD
 // Alternative name for search form
 [coverage_search]
 
@@ -99,6 +116,17 @@ Advanced WordPress plugin to create and manage coverage areas with interactive m
 - Advanced styling options including typography, colors, spacing
 - Clickable featured images with hover effects
 - Live preview in Elementor editor
+=======
+
+// Search form with custom redirect
+[map_coverage_search redirect_page="/custom-page"]
+```
+
+### Elementor Widget
+- Available in Elementor panel under "General" category
+- Choose between "Tam Xəritə + Axtarış" or "Yalnız Axtarış Formu"
+- Configure styling options and redirect settings
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
 
 ## Technical Features
 
@@ -141,6 +169,7 @@ Each coverage area supports sophisticated address management:
 - Custom scrollbar styling for better UX
 - Fully responsive design for all screen sizes
 
+<<<<<<< HEAD
 ## Changelog
 
 ### Version 1.1.0 (November 12, 2025)
@@ -176,6 +205,8 @@ Each coverage area supports sophisticated address management:
 
 ---
 
+=======
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
 ## Next Steps / Improvements
 
 - Add server-side REST endpoints for large data sets

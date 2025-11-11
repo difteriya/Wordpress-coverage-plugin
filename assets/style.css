@@ -434,6 +434,7 @@
     background: #a0aec0;
 }
 
+<<<<<<< HEAD
 /* Coverage Cards Styling */
 .coverage-cards-container {
     margin: 20px 0;
@@ -653,6 +654,8 @@
     }
 }
 
+=======
+>>>>>>> 35ccc59884cd16c0c4f4bad8712909151a0d1da1
 .map-controls-grid {
     position: relative;
 }
