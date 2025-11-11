@@ -10,11 +10,19 @@
             style: function(feature) {
                 const props = feature.getProperties() || {};
                 const color = props.color || '#007bff';
-                return new ol.style.Style({
+                const isCircle = props.geometry_type === 'Circle';
+                
+                let style = new ol.style.Style({
                     fill: new ol.style.Fill({ color: colorToRgba(color, 0.18) }),
-                    stroke: new ol.style.Stroke({ color: color, width: 2 }),
+                    stroke: new ol.style.Stroke({ 
+                        color: color, 
+                        width: isCircle ? 3 : 2,
+                        lineDash: isCircle ? [8, 8] : undefined
+                    }),
                     image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: color }) })
                 });
+                
+                return style;
             }
         });
 
@@ -53,12 +61,22 @@
                 const format = new ol.format.GeoJSON();
                 const obj = JSON.parse(hidden.value);
                 const feats = format.readFeatures(obj, { featureProjection: 'EPSG:3857' });
+                
+                // Process features to restore circles if needed
+                feats.forEach(function(feature) {
+                    const props = feature.getProperties() || {};
+                    if (props.geometry_type === 'Circle' && props.circle_center && props.circle_radius) {
+                        // This was originally a circle, keep it as polygon but maintain circle properties
+                        feature.set('geometry_type', 'Circle');
+                    }
+                });
+                
                 source.addFeatures(feats);
                 // zoom to features
                 const extent = source.getExtent();
                 if (!ol.extent.isEmpty(extent)) map.getView().fit(extent, { padding: [20,20,20,20] });
             } catch(e) {
-                console.warn('Invalid geojson in meta');
+                console.warn('Invalid geojson in meta:', e);
             }
         }
 
@@ -77,7 +95,15 @@
 
         // props panel buttons
         $('#coverage-prop-save').on('click', function(){ savePropsToFeature(); });
-        $('#coverage-prop-delete').on('click', function(){ if (selectedFeature) { source.removeFeature(selectedFeature); selectedFeature = null; saveGeoJSON(); closePropsPanel(); } });
+        $('#coverage-prop-delete').on('click', function(){ 
+            if (selectedFeature) { 
+                source.removeFeature(selectedFeature); 
+                selectedFeature = null; 
+                selectInteraction.getFeatures().clear();
+                saveGeoJSON(); 
+                closePropsPanel(); 
+            } 
+        });
         $('#coverage-prop-close').on('click', function(){ closePropsPanel(); selectInteraction.getFeatures().clear(); });
 
         // Address management
@@ -141,26 +167,60 @@
 
     function startDraw(type) {
         if (draw) map.removeInteraction(draw);
-        draw = new ol.interaction.Draw({ source: source, type: type });
+        
+        if (type === 'Circle') {
+            // For circles, use a different approach
+            draw = new ol.interaction.Draw({ 
+                source: source, 
+                type: type,
+                geometryFunction: function(coordinates, geometry) {
+                    if (!geometry) {
+                        geometry = new ol.geom.Circle(coordinates[0], 0);
+                    }
+                    const center = coordinates[0];
+                    const last = coordinates[1];
+                    const radius = Math.sqrt(Math.pow(last[0] - center[0], 2) + Math.pow(last[1] - center[1], 2));
+                    geometry.setCenter(center);
+                    geometry.setRadius(radius);
+                    return geometry;
+                }
+            });
+        } else {
+            draw = new ol.interaction.Draw({ source: source, type: type });
+        }
+        
         draw.on('drawend', function(evt){
             const feature = evt.feature;
             // set some default properties
             feature.set('title', '');
             feature.set('color', '#007bff');
-            // radius handling for Circle geometry
+            
+            // Handle Circle geometry specially
             const geom = feature.getGeometry();
             if (geom && geom.getType && geom.getType() === 'Circle') {
-                const radius = geom.getRadius();
                 const center = geom.getCenter();
-                // compute approximate meters using lon/lat transform and haversine
+                const radius = geom.getRadius();
+                
+                // Convert circle to polygon for GeoJSON compatibility
+                const polygon = new ol.geom.Polygon.fromCircle(geom, 64);
+                feature.setGeometry(polygon);
+                
+                // Store circle info as properties
                 const centerLonLat = ol.proj.toLonLat(center);
                 const p2 = ol.proj.toLonLat([center[0] + radius, center[1]]);
                 const rMeters = haversineDistance(centerLonLat[1], centerLonLat[0], p2[1], p2[0]);
+                
                 feature.set('radius_m', Math.round(rMeters));
+                feature.set('circle_center', center);
+                feature.set('circle_radius', radius);
+                feature.set('geometry_type', 'Circle');
             }
+            
             // open props for the newly drawn feature
             openPropsPanel(feature);
-            map.removeInteraction(draw); draw = null; saveGeoJSON();
+            map.removeInteraction(draw); 
+            draw = null; 
+            saveGeoJSON();
         });
         map.addInteraction(draw);
     }
@@ -180,9 +240,31 @@
         const radiusEl = document.getElementById('coverage-prop-radius');
         const colorEl = document.getElementById('coverage-prop-color');
         const props = feature.getProperties() || {};
+        
         titleEl.value = props.title || '';
         radiusEl.value = props.radius_m || '';
         colorEl.value = props.color || '#007bff';
+        
+        // Show different title for circle features
+        const panelTitle = panel.querySelector('h4');
+        if (panelTitle) {
+            if (props.geometry_type === 'Circle') {
+                panelTitle.textContent = 'Dairə Xüsusiyyətləri';
+            } else {
+                panelTitle.textContent = 'Xüsusiyyətlər';
+            }
+        }
+        
+        // Show/hide radius field based on geometry type
+        const radiusContainer = radiusEl.closest('p');
+        if (radiusContainer) {
+            if (props.geometry_type === 'Circle') {
+                radiusContainer.style.display = 'block';
+            } else {
+                radiusContainer.style.display = props.radius_m ? 'block' : 'none';
+            }
+        }
+        
         panel.style.display = 'block';
     }
 
@@ -197,9 +279,38 @@
         const title = document.getElementById('coverage-prop-title').value;
         const radius = document.getElementById('coverage-prop-radius').value;
         const color = document.getElementById('coverage-prop-color').value;
+        
         selectedFeature.set('title', title);
-        if (radius !== '') selectedFeature.set('radius_m', Number(radius)); else selectedFeature.unset('radius_m');
         selectedFeature.set('color', color);
+        
+        if (radius !== '') {
+            const radiusNum = Number(radius);
+            selectedFeature.set('radius_m', radiusNum);
+            
+            // If this is a circle, update the geometry based on new radius
+            const props = selectedFeature.getProperties() || {};
+            if (props.geometry_type === 'Circle' && props.circle_center) {
+                const center = props.circle_center;
+                const centerLonLat = ol.proj.toLonLat(center);
+                // Convert meters to map units (approximate)
+                const lat = centerLonLat[1];
+                const metersPerUnit = 111320 * Math.cos(lat * Math.PI / 180); // approximate meters per degree
+                const radiusInMapUnits = radiusNum / metersPerUnit;
+                const radiusInProjected = radiusInMapUnits * (Math.PI / 180) * 6378137; // rough conversion
+                
+                // Create new circle geometry and convert to polygon
+                const circleGeom = new ol.geom.Circle(center, radiusInProjected);
+                const polygon = new ol.geom.Polygon.fromCircle(circleGeom, 64);
+                selectedFeature.setGeometry(polygon);
+                
+                selectedFeature.set('circle_radius', radiusInProjected);
+            }
+        } else {
+            selectedFeature.unset('radius_m');
+        }
+        
+        // Trigger style update
+        selectedFeature.changed();
         saveGeoJSON();
         closePropsPanel();
     }
