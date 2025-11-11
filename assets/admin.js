@@ -1,0 +1,230 @@
+/* global ol */
+(function($){
+    let map, draw, source, vectorLayer, modify, selectInteraction, selectedFeature = null;
+    let addressRowIndex = 0;
+
+    function init() {
+        source = new ol.source.Vector();
+        vectorLayer = new ol.layer.Vector({
+            source: source,
+            style: function(feature) {
+                const props = feature.getProperties() || {};
+                const color = props.color || '#007bff';
+                return new ol.style.Style({
+                    fill: new ol.style.Fill({ color: colorToRgba(color, 0.18) }),
+                    stroke: new ol.style.Stroke({ color: color, width: 2 }),
+                    image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: color }) })
+                });
+            }
+        });
+
+        map = new ol.Map({
+            target: 'coverage-admin-map',
+            layers: [
+                new ol.layer.Tile({ source: new ol.source.OSM() }),
+                vectorLayer
+            ],
+            view: new ol.View({ center: ol.proj.fromLonLat([0,0]), zoom: 2 })
+        });
+
+        modify = new ol.interaction.Modify({ source: source });
+        map.addInteraction(modify);
+
+        // select interaction for editing properties
+        selectInteraction = new ol.interaction.Select();
+        map.addInteraction(selectInteraction);
+        selectInteraction.on('select', function(e){
+            const features = e.target.getFeatures();
+            if (features && features.getLength && features.getLength() > 0) {
+                const f = features.item(0);
+                openPropsPanel(f);
+            } else {
+                closePropsPanel();
+            }
+        });
+
+        // Set up initial address row index
+        addressRowIndex = Math.max(0, $('.address-row').length);
+
+        // load existing geojson
+        const hidden = document.getElementById('coverage-geojson');
+        if ( hidden && hidden.value ) {
+            try {
+                const format = new ol.format.GeoJSON();
+                const obj = JSON.parse(hidden.value);
+                const feats = format.readFeatures(obj, { featureProjection: 'EPSG:3857' });
+                source.addFeatures(feats);
+                // zoom to features
+                const extent = source.getExtent();
+                if (!ol.extent.isEmpty(extent)) map.getView().fit(extent, { padding: [20,20,20,20] });
+            } catch(e) {
+                console.warn('Invalid geojson in meta');
+            }
+        }
+
+        // save on modify
+        modify.on('modifyend', saveGeoJSON);
+
+        // when a feature is removed/added/changed, keep props panel in sync
+        source.on(['addfeature','removefeature','changefeature'], function(){
+            saveGeoJSON();
+        });
+
+        $('#coverage-draw-point').on('click', function(){ startDraw('Point'); });
+        $('#coverage-draw-polygon').on('click', function(){ startDraw('Polygon'); });
+        $('#coverage-draw-circle').on('click', function(){ startDraw('Circle'); });
+        $('#coverage-clear').on('click', function(){ source.clear(); saveGeoJSON(); closePropsPanel(); });
+
+        // props panel buttons
+        $('#coverage-prop-save').on('click', function(){ savePropsToFeature(); });
+        $('#coverage-prop-delete').on('click', function(){ if (selectedFeature) { source.removeFeature(selectedFeature); selectedFeature = null; saveGeoJSON(); closePropsPanel(); } });
+        $('#coverage-prop-close').on('click', function(){ closePropsPanel(); selectInteraction.getFeatures().clear(); });
+
+        // Address management
+        setupAddressManagement();
+    }
+
+    function setupAddressManagement() {
+        // Add street button
+        $('#add-address-row').on('click', function() {
+            addAddressRow();
+        });
+
+        // Event delegation for dynamically created elements
+        $(document).on('click', '.remove-address-row', function() {
+            $(this).closest('.address-row').remove();
+        });
+
+        $(document).on('click', '.add-number', function() {
+            addNumberRow($(this).closest('.address-row'));
+        });
+
+        $(document).on('click', '.remove-number', function() {
+            $(this).closest('.number-row').remove();
+        });
+    }
+
+    function addAddressRow() {
+        const container = $('#address-rows-container');
+        const newIndex = addressRowIndex++;
+        const html = `
+            <div class="address-row" data-index="${newIndex}">
+                <div class="address-row-header">
+                            <input type="text" class="street-input" name="addresses[${newIndex}][street]" value="" placeholder="Küçə adı" style="width: 300px; margin-right: 10px;" />
+                            <button type="button" class="button remove-address-row" style="margin-left: 10px; color: #a00;">Küçəni Sil</button>
+                </div>
+                <div class="numbers-container" style="margin-left: 20px; margin-top: 8px;">
+                    <div class="add-number-container">
+                                                        <button type="button" class="button add-number">Nömrə Əlavə Et</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.append(html);
+    }
+
+    function addNumberRow($addressRow) {
+        const index = $addressRow.data('index');
+        const $numbersContainer = $addressRow.find('.numbers-container');
+        const $addContainer = $numbersContainer.find('.add-number-container');
+        const numberIndex = $numbersContainer.find('.number-row').length;
+        
+        const html = `
+            <div class="number-row">
+                <input type="text" class="number-input" name="addresses[${index}][numbers][${numberIndex}]" value="" placeholder="Nömrə" style="width: 80px; margin-right: 10px;" />
+                <button type="button" class="button remove-number" style="margin-left: 10px; color: #a00;">Sil</button>
+            </div>
+        `;
+        
+        $addContainer.before(html);
+    }
+
+    function startDraw(type) {
+        if (draw) map.removeInteraction(draw);
+        draw = new ol.interaction.Draw({ source: source, type: type });
+        draw.on('drawend', function(evt){
+            const feature = evt.feature;
+            // set some default properties
+            feature.set('title', '');
+            feature.set('color', '#007bff');
+            // radius handling for Circle geometry
+            const geom = feature.getGeometry();
+            if (geom && geom.getType && geom.getType() === 'Circle') {
+                const radius = geom.getRadius();
+                const center = geom.getCenter();
+                // compute approximate meters using lon/lat transform and haversine
+                const centerLonLat = ol.proj.toLonLat(center);
+                const p2 = ol.proj.toLonLat([center[0] + radius, center[1]]);
+                const rMeters = haversineDistance(centerLonLat[1], centerLonLat[0], p2[1], p2[0]);
+                feature.set('radius_m', Math.round(rMeters));
+            }
+            // open props for the newly drawn feature
+            openPropsPanel(feature);
+            map.removeInteraction(draw); draw = null; saveGeoJSON();
+        });
+        map.addInteraction(draw);
+    }
+
+    function saveGeoJSON() {
+        const format = new ol.format.GeoJSON();
+        const feats = source.getFeatures();
+        const geojson = format.writeFeaturesObject(feats, { featureProjection: 'EPSG:3857' });
+        document.getElementById('coverage-geojson').value = JSON.stringify(geojson);
+    }
+
+    function openPropsPanel(feature) {
+        selectedFeature = feature;
+        const panel = document.getElementById('coverage-props');
+        if (!panel) return;
+        const titleEl = document.getElementById('coverage-prop-title');
+        const radiusEl = document.getElementById('coverage-prop-radius');
+        const colorEl = document.getElementById('coverage-prop-color');
+        const props = feature.getProperties() || {};
+        titleEl.value = props.title || '';
+        radiusEl.value = props.radius_m || '';
+        colorEl.value = props.color || '#007bff';
+        panel.style.display = 'block';
+    }
+
+    function closePropsPanel() {
+        const panel = document.getElementById('coverage-props');
+        if (panel) panel.style.display = 'none';
+        selectedFeature = null;
+    }
+
+    function savePropsToFeature() {
+        if (!selectedFeature) return;
+        const title = document.getElementById('coverage-prop-title').value;
+        const radius = document.getElementById('coverage-prop-radius').value;
+        const color = document.getElementById('coverage-prop-color').value;
+        selectedFeature.set('title', title);
+        if (radius !== '') selectedFeature.set('radius_m', Number(radius)); else selectedFeature.unset('radius_m');
+        selectedFeature.set('color', color);
+        saveGeoJSON();
+        closePropsPanel();
+    }
+
+    // small helper to convert hex color to rgba
+    function colorToRgba(hex, alpha){
+        if (!hex) return 'rgba(0,123,255,'+alpha+')';
+        const c = hex.replace('#','');
+        const bigint = parseInt(c, 16);
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+        return 'rgba('+r+','+g+','+b+','+alpha+')';
+    }
+
+    // haversine (lat1, lon1, lat2, lon2) in meters
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+        function toRad(x){ return x * Math.PI / 180; }
+        const R = 6371000; // meters
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    $(document).ready(function(){ init(); });
+})(jQuery);
