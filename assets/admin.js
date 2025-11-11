@@ -1,5 +1,16 @@
 /* global ol */
 (function($){
+    'use strict';
+    
+    // Global error handler for async issues in admin
+    window.addEventListener('error', function(e) {
+        if (e.error && e.error.message && e.error.message.includes('message channel closed')) {
+            e.preventDefault();
+            console.warn('Suppressed admin message channel error');
+            return false;
+        }
+    });
+    
     let map, draw, source, vectorLayer, modify, selectInteraction, selectedFeature = null;
     let addressRowIndex = 0;
 
@@ -150,7 +161,17 @@
         $('#coverage-draw-point').on('click', function(){ startDraw('Point'); });
         $('#coverage-draw-polygon').on('click', function(){ startDraw('Polygon'); });
         $('#coverage-draw-circle').on('click', function(){ startDraw('Circle'); });
-        $('#coverage-clear').on('click', function(){ source.clear(); saveGeoJSON(); closePropsPanel(); });
+        $('#coverage-clear').on('click', function(){ 
+            try {
+                source.clear(); 
+                saveGeoJSON(); 
+                closePropsPanel(); 
+                selectInteraction.getFeatures().clear();
+                console.log('Map cleared successfully');
+            } catch (error) {
+                console.error('Error clearing map:', error);
+            }
+        });
 
         // props panel buttons
         $('#coverage-prop-save').on('click', function(){ savePropsToFeature(); });
@@ -274,64 +295,72 @@
     }
 
     function startDraw(type) {
-        if (draw) map.removeInteraction(draw);
-        
-        if (type === 'Circle') {
-            // For circles, use a different approach
-            draw = new ol.interaction.Draw({ 
-                source: source, 
-                type: type,
-                geometryFunction: function(coordinates, geometry) {
-                    if (!geometry) {
-                        geometry = new ol.geom.Circle(coordinates[0], 0);
-                    }
-                    const center = coordinates[0];
-                    const last = coordinates[1];
-                    const radius = Math.sqrt(Math.pow(last[0] - center[0], 2) + Math.pow(last[1] - center[1], 2));
-                    geometry.setCenter(center);
-                    geometry.setRadius(radius);
-                    return geometry;
-                }
-            });
-        } else {
-            draw = new ol.interaction.Draw({ source: source, type: type });
-        }
-        
-        draw.on('drawend', function(evt){
-            const feature = evt.feature;
-            // set some default properties
-            feature.set('title', '');
-            feature.set('color', '#007bff');
-            
-            // Handle Circle geometry specially
-            const geom = feature.getGeometry();
-            if (geom && geom.getType && geom.getType() === 'Circle') {
-                const center = geom.getCenter();
-                const radius = geom.getRadius();
-                
-                // Convert circle to polygon for GeoJSON compatibility
-                const polygon = new ol.geom.Polygon.fromCircle(geom, 64);
-                feature.setGeometry(polygon);
-                
-                // Store circle info as properties
-                const centerLonLat = ol.proj.toLonLat(center);
-                const p2 = ol.proj.toLonLat([center[0] + radius, center[1]]);
-                const rMeters = haversineDistance(centerLonLat[1], centerLonLat[0], p2[1], p2[0]);
-                
-                feature.set('radius_m', Math.round(rMeters));
-                feature.set('circle_center', center);
-                feature.set('circle_radius', radius);
-                feature.set('geometry_type', 'Circle');
+        try {
+            if (draw) {
+                map.removeInteraction(draw);
+                draw = null;
             }
             
-            // open props for the newly drawn feature
-            centerMapOnFeature(feature);
-            openPropsPanel(feature);
-            map.removeInteraction(draw); 
-            draw = null; 
-            saveGeoJSON();
-        });
-        map.addInteraction(draw);
+            if (type === 'Circle') {
+                // For circles, use a special interaction that creates polygons
+                draw = new ol.interaction.Draw({ 
+                    source: source, 
+                    type: 'Circle'
+                });
+            } else {
+                draw = new ol.interaction.Draw({ source: source, type: type });
+            }
+            
+            draw.on('drawend', function(evt){
+                try {
+                    const feature = evt.feature;
+                    const geom = feature.getGeometry();
+                    
+                    // Set default properties
+                    feature.set('title', '');
+                    feature.set('color', '#007bff');
+                    
+                    // Handle Circle geometry specially
+                    if (geom && geom.getType && geom.getType() === 'Circle') {
+                        const center = geom.getCenter();
+                        const radius = geom.getRadius();
+                        
+                        // Convert circle to polygon for GeoJSON compatibility
+                        const polygon = new ol.geom.Polygon.fromCircle(geom, 64);
+                        feature.setGeometry(polygon);
+                        
+                        // Store circle info as properties for later use
+                        const centerLonLat = ol.proj.toLonLat(center);
+                        const p2 = ol.proj.toLonLat([center[0] + radius, center[1]]);
+                        const rMeters = haversineDistance(centerLonLat[1], centerLonLat[0], p2[1], p2[0]);
+                        
+                        feature.set('radius_m', Math.round(rMeters));
+                        feature.set('circle_center', center);
+                        feature.set('circle_radius', radius);
+                        feature.set('geometry_type', 'Circle');
+                        
+                        console.log('Circle created with radius:', Math.round(rMeters), 'meters');
+                    }
+                    
+                    // Center map and open properties panel
+                    centerMapOnFeature(feature);
+                    openPropsPanel(feature);
+                    
+                    // Clean up drawing interaction
+                    map.removeInteraction(draw); 
+                    draw = null; 
+                    saveGeoJSON();
+                    
+                } catch (error) {
+                    console.error('Error handling draw end:', error);
+                }
+            });
+            
+            map.addInteraction(draw);
+            
+        } catch (error) {
+            console.error('Error starting draw interaction:', error);
+        }
     }
 
     function saveGeoJSON() {

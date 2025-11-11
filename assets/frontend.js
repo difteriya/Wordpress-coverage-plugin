@@ -1,18 +1,54 @@
 /* global ol, MAP_COVERAGE_DATA, turf */
 (function(){
+    'use strict';
+    
+    // Global error handler for async issues
+    window.addEventListener('error', function(e) {
+        if (e.error && e.error.message && e.error.message.includes('message channel closed')) {
+            // Suppress the specific async error that's causing issues
+            e.preventDefault();
+            console.warn('Suppressed message channel error - likely browser extension conflict');
+            return false;
+        }
+    });
+    
+    window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && e.reason.message && e.reason.message.includes('message channel closed')) {
+            // Suppress the specific promise rejection
+            e.preventDefault();
+            console.warn('Suppressed message channel promise rejection - likely browser extension conflict');
+            return false;
+        }
+    });
+    
+    let initializationAttempts = 0;
+    const MAX_INIT_ATTEMPTS = 50;
+    
     function init(){
         // Check if MAP_COVERAGE_DATA is available
         if (typeof MAP_COVERAGE_DATA === 'undefined') {
-            console.warn('MAP_COVERAGE_DATA not available yet, retrying...');
-            setTimeout(init, 100);
-            return;
+            initializationAttempts++;
+            if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+                console.warn('MAP_COVERAGE_DATA not available yet, retrying... (attempt ' + initializationAttempts + ')');
+                setTimeout(init, 100);
+                return;
+            } else {
+                console.error('MAP_COVERAGE_DATA failed to load after maximum attempts');
+                return;
+            }
         }
         
         // Ensure required libraries are loaded
         if (typeof ol === 'undefined') {
-            console.warn('OpenLayers not loaded yet, retrying...');
-            setTimeout(init, 100);
-            return;
+            initializationAttempts++;
+            if (initializationAttempts < MAX_INIT_ATTEMPTS) {
+                console.warn('OpenLayers not loaded yet, retrying... (attempt ' + initializationAttempts + ')');
+                setTimeout(init, 100);
+                return;
+            } else {
+                console.error('OpenLayers failed to load after maximum attempts');
+                return;
+            }
         }
 
         function escapeHtml(str) {

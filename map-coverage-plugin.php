@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Map Coverage Plugin with Region Cards
  * Description: Advanced WordPress plugin for managing coverage areas with interactive maps, intelligent search, region cards display, and full Azerbaijani translation. Features include OpenLayers mapping, autocomplete address search, responsive card layouts, Elementor integration, and comprehensive coverage management.
- * Version: 1.1.6
+ * Version: 1.1.7
  * Author: Khudiyev
  * Author URI: https://xudiyev.com
  * Text Domain: map-coverage-plugin
@@ -626,7 +626,7 @@ class Map_Coverage_Plugin {
                     }
                     
                     $featured_image = get_the_post_thumbnail_url( $post->ID, 'medium' );
-                    $default_image = plugin_dir_url( __FILE__ ) . 'assets/default-region.jpg';
+                    $default_image = plugin_dir_url( __FILE__ ) . 'assets/default-region.svg';
                     $image_url = $featured_image ? $featured_image : $default_image;
                     ?>
                     <div class="coverage-card">
