@@ -332,6 +332,22 @@ class Map_Coverage_Cards_Widget extends \Elementor\Widget_Base {
     protected function render() {
         $settings = $this->get_settings_for_display();
         
+        // Check if there are any coverage areas
+        $test_query = get_posts( array( 
+            'post_type' => 'coverage_area', 
+            'numberposts' => 1, 
+            'post_status' => 'publish'
+        ) );
+        
+        if ( empty( $test_query ) ) {
+            echo '<div style="background: #f0f8ff; border: 2px dashed #4285f4; padding: 20px; border-radius: 8px; text-align: center; color: #1a73e8; font-family: Arial, sans-serif;">
+                <h3 style="margin: 0 0 10px 0; color: #1a73e8;">📋 Rayon Kartları Widget</h3>
+                <p style="margin: 0;">Hələ ki heç bir əhatə sahəsi yaradılmayıb. Widgetin işləməsi üçün ilk öncə admin paneldən əhatə sahələri əlavə edin.</p>
+                <small style="opacity: 0.8;">Admin → Əhatə Sahələri → Yeni Əlavə Et</small>
+            </div>';
+            return;
+        }
+        
         $shortcode_atts = [
             'columns' => $settings['columns'],
             'show_excerpt' => $settings['show_excerpt'],

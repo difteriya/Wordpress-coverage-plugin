@@ -153,6 +153,24 @@ class Map_Coverage_Map_Widget extends \Elementor\Widget_Base {
     protected function render() {
         $settings = $this->get_settings_for_display();
         
+        // Check if there are any coverage areas
+        $test_query = get_posts( array( 
+            'post_type' => 'coverage_area', 
+            'numberposts' => 1, 
+            'post_status' => 'publish'
+        ) );
+        
+        if ( empty( $test_query ) ) {
+            echo '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 25px; text-align: center; color: white; font-family: Arial, sans-serif;">
+                <h3 style="margin: 0 0 10px 0; color: white;">🗺️ Əhatə Xəritəsi Widget</h3>
+                <p style="margin: 0 0 15px 0; opacity: 0.9;">Xəritənin işləməsi üçün ilk öncə əhatə sahələri yaradın.</p>
+                <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 14px;">
+                    <strong>Addım:</strong> Admin → Əhatə Sahələri → Yeni Əlavə Et
+                </div>
+            </div>';
+            return;
+        }
+        
         // Custom styling based on settings
         if ( $settings['show_search_form'] !== 'yes' ) {
             echo '<style>#map-coverage-search { display: none !important; }</style>';

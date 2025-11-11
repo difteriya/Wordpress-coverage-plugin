@@ -173,6 +173,26 @@ class Map_Coverage_Search_Widget extends \Elementor\Widget_Base {
 
     protected function render() {
         $settings = $this->get_settings_for_display();
+        
+        // Check if there are any cities (for search functionality)
+        $cities = get_terms( array(
+            'taxonomy' => 'coverage_city',
+            'hide_empty' => false,
+        ) );
+        
+        if ( empty( $cities ) || is_wp_error( $cities ) ) {
+            echo '<div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); border-radius: 12px; padding: 25px; text-align: center; color: white; font-family: Arial, sans-serif;">
+                <h3 style="margin: 0 0 10px 0; color: white;">🔍 Axtarış Widget</h3>
+                <p style="margin: 0 0 15px 0; opacity: 0.9;">Axtarış funksiyası üçün ilk öncə şəhərlər və əhatə sahələri əlavə edin.</p>
+                <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 14px;">
+                    <strong>Addımlar:</strong><br>
+                    1. Admin → Əhatə Sahələri → Şəhərlər<br>
+                    2. Admin → Əhatə Sahələri → Yeni Əlavə Et
+                </div>
+            </div>';
+            return;
+        }
+        
         $redirect_url = '';
         
         if ( ! empty( $settings['redirect_page']['url'] ) ) {
