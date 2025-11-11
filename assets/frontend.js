@@ -7,6 +7,13 @@
             setTimeout(init, 100);
             return;
         }
+        
+        // Ensure required libraries are loaded
+        if (typeof ol === 'undefined') {
+            console.warn('OpenLayers not loaded yet, retrying...');
+            setTimeout(init, 100);
+            return;
+        }
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -49,8 +56,12 @@
             const feats = format.readFeatures(fc, { featureProjection: 'EPSG:3857' });
             features.addFeatures(feats);
             const extent = features.getExtent();
-            if (!ol.extent.isEmpty(extent)) map.getView().fit(extent, { padding: [20,20,20,20] });
-        }catch(e){ console.warn(e); }
+            if (!ol.extent.isEmpty(extent)) {
+                map.getView().fit(extent, { padding: [20,20,20,20] });
+            }
+        }catch(e){ 
+            console.warn('Error loading map features:', e); 
+        }
 
         // Build dropdowns for regions and addresses
         const posts = MAP_COVERAGE_DATA.posts || [];
@@ -207,30 +218,35 @@
                 }
                 
                 streetSearchTimeout = setTimeout(() => {
-                    const region = posts.find(p => String(p.id) === String(regionId));
-                    if (!region) return;
-                    
-                    let matchingStreets;
-                    if (term.length === 0) {
-                        // Show all streets when no filter
-                        matchingStreets = (region.addresses || [])
-                            .map(addr => ({
-                                label: addr.street,
-                                value: addr.street,
-                                numbers: addr.numbers || []
-                            }));
-                    } else {
-                        // Filter streets when user types
-                        matchingStreets = (region.addresses || [])
-                            .filter(addr => addr.street.toLowerCase().includes(term.toLowerCase()))
-                            .map(addr => ({
-                                label: addr.street,
-                                value: addr.street,
-                                numbers: addr.numbers || []
-                            }));
+                    try {
+                        const region = posts.find(p => String(p.id) === String(regionId));
+                        if (!region) return;
+                        
+                        let matchingStreets;
+                        if (term.length === 0) {
+                            // Show all streets when no filter
+                            matchingStreets = (region.addresses || [])
+                                .map(addr => ({
+                                    label: addr.street,
+                                    value: addr.street,
+                                    numbers: addr.numbers || []
+                                }));
+                        } else {
+                            // Filter streets when user types
+                            matchingStreets = (region.addresses || [])
+                                .filter(addr => addr.street && addr.street.toLowerCase().includes(term.toLowerCase()))
+                                .map(addr => ({
+                                    label: addr.street,
+                                    value: addr.street,
+                                    numbers: addr.numbers || []
+                                }));
+                        }
+                        
+                        displayStreetSuggestions(matchingStreets.slice(0, 10)); // Show up to 10 results
+                    } catch (error) {
+                        console.error('Error in street autocomplete:', error);
+                        streetSuggestions.style.display = 'none';
                     }
-                    
-                    displayStreetSuggestions(matchingStreets.slice(0, 10)); // Show up to 10 results
                 }, 150);
             });
             
@@ -534,7 +550,16 @@
         });
     }
 
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', function() {
+        // Use requestAnimationFrame to ensure DOM is fully ready
+        requestAnimationFrame(function() {
+            try {
+                init();
+            } catch (error) {
+                console.error('Error initializing frontend map:', error);
+            }
+        });
+    });
 
     // Global function for search-only form
     window.initializeSearchForm = function(redirectPage) {

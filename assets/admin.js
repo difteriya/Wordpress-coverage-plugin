@@ -4,6 +4,18 @@
     let addressRowIndex = 0;
 
     function init() {
+        // Check if required libraries are available
+        if (typeof ol === 'undefined') {
+            console.error('OpenLayers not loaded');
+            return;
+        }
+        
+        if (typeof $ === 'undefined') {
+            console.error('jQuery not loaded');
+            return;
+        }
+        
+        try {
         source = new ol.source.Vector();
         vectorLayer = new ol.layer.Vector({
             source: source,
@@ -160,6 +172,10 @@
 
         // Address management
         setupAddressManagement();
+        
+        } catch (error) {
+            console.error('Error initializing admin map:', error);
+        }
     }
 
     function setupAddressManagement() {
@@ -319,10 +335,14 @@
     }
 
     function saveGeoJSON() {
-        const format = new ol.format.GeoJSON();
-        const feats = source.getFeatures();
-        const geojson = format.writeFeaturesObject(feats, { featureProjection: 'EPSG:3857' });
-        document.getElementById('coverage-geojson').value = JSON.stringify(geojson);
+        try {
+            const format = new ol.format.GeoJSON();
+            const feats = source.getFeatures();
+            const geojson = format.writeFeaturesObject(feats, { featureProjection: 'EPSG:3857' });
+            document.getElementById('coverage-geojson').value = JSON.stringify(geojson);
+        } catch (error) {
+            console.error('Error saving GeoJSON:', error);
+        }
     }
 
     function openPropsPanel(feature) {
@@ -430,5 +450,14 @@
         return R * c;
     }
 
-    $(document).ready(function(){ init(); });
+    $(document).ready(function(){ 
+        // Use setTimeout to ensure all resources are loaded
+        setTimeout(function() {
+            try {
+                init(); 
+            } catch (error) {
+                console.error('Error initializing admin interface:', error);
+            }
+        }, 100);
+    });
 })(jQuery);
